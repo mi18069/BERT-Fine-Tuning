@@ -1,0 +1,44 @@
+# LaTeX Files
+# Auxiliary files created by the LaTeX compiler
+*.aux
+*.bbl
+*.blg
+*.brf
+*.fdb_latexmk
+*.fls
+*.glg
+*.gls
+*.glo
+*.idx
+*.ilg
+*.ind
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
+
+# Other common temporary files
+*.pyg
+*.maf
+*.mtc
+*.mtc1
+
+# Jupyter Notebook Files
+# Notebook checkpoints are auto-saved copies that should not be committed.
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Other common Python/Jupyter-related files
+__pycache__/
+*.py[co]
+*.swp
+.DS_Store
+
+# Virtual environment
+.venv/
+venv/
+env/
