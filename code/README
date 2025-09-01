@@ -1,0 +1,28 @@
+Structure of work:
+
+project/
+|
+|--- datasets/				# Loaded and saved raw and data ready for models
+|    |--- Dataset.ipynb			# Notebook for loading dataset from Kaggle
+|    |--- stanford_imdb_dataset/	# Saved imdb dataset
+|    |--- processed_data/		# Data preprocessed for models
+|    |    |--- Tokenized_Dataset.ipynb/ # Notebook that demonstrates process of tokenization
+|    |    |--- tokenized_dataset/	# Saved tokenized dataset
+|    |    |--- tensorflow_datasets/	# Saved Tensorflow datasets for model
+|
+|--- models/
+|    |--- Base_Model.ipynb		# Notebook for loading base DistilBERT model
+|    |--- base_model/			# Saved base uncased DistilBERT model
+|    |--- Fine_tuning_models.ipynb	# Notebook that creates different fine-tuned models
+|    |--- pre_fine_tuned_models/	# Saved different pre-fine-tuned models
+|
+|--- training/				
+|    |--- ModelTraining.ipynb		# Notebook for training and tracking metrics
+|    |--- model_trainer.py		# Provides classes for training models and saving metrics 
+|    |--- training_metrics/		# Saved metrics of training process
+| 
+|--- evaluation/
+|    |--- Model_Evaluation.ipynb	# Notebook for evaluation and tracking metrics
+|    |--- model_evaluator.ipynb		# Provides class for evaluation of models and saving results 
+|    |--- evaluation_metrics/		# Saved metrics of evaluation
+
