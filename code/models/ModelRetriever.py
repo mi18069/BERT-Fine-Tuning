@@ -1,59 +1,57 @@
+#!/usr/bin/env python
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 from transformers import AutoModel
 
-# Core Classes for Fine-Tuning
-# These classes wrap the base transformer model and add custom layers or adapters.
-
 class ClassificationModel(nn.Module):
-    """
-    A generic classification head to be placed on top of a transformer model.
-    It takes the base model's last hidden state, extracts the CLS token,
-    and passes it through a dropout and a linear layer for classification.
-    """
     def __init__(self, base_model):
         super(ClassificationModel, self).__init__()
         
         self.base_model = base_model
         self.dropout = nn.Dropout(0.1)
-        self.linear = nn.Linear(768, 2)  # 768 is the hidden size for DistilBERT, 2 is for positive/negative labels
+        self.linear = nn.Linear(768, 2) # output features from bert is 768 and 2 is number of labels
         
     def forward(self, input_ids, attn_mask):
+        
         last_hidden_state = self.base_model(input_ids, attention_mask=attn_mask).last_hidden_state
-        cls_embedding = last_hidden_state[:, 0, :]  # Take the [CLS] token representation
+        cls_embedding = last_hidden_state[:, 0, :]   # Take [CLS] token representation
         x = self.dropout(cls_embedding)
-        logits = self.linear(x)
+        logits = self.linear(x) 
         return logits
+
+def get_full_classification_model(base_model):
+    # Simply add classification head
+    model = ClassificationModel(base_model)
+
+    return model
+
+def get_classification_head_model(base_model):
+    # Freeze all parameters
+    for param in base_model.parameters():
+        param.requires_grad = False
+            
+    model = ClassificationModel(base_model)
+
+    return model
 
 
 class BottleneckAdapter(nn.Module):
-    """
-    A bottleneck adapter module that can be inserted into a transformer.
-    
-    It projects hidden states down to a lower-dimensional space and then 
-    back up again, with non-linearity and dropout in between. This helps 
-    the model adapt to new tasks without updating the original transformer.
-    
-    Args:
-        hidden_size: The dimension of the model's hidden states (e.g., 768 for DistilBERT)
-        adapter_size: The smaller bottleneck dimension (e.g., 64)
-        dropout_rate: Regularization to improve generalization
-    """
     def __init__(self, hidden_size, adapter_size, dropout_rate=0.1):
         super().__init__()
         
-        self.down_project = nn.Linear(hidden_size, adapter_size)  # d -> b
-        self.activation = nn.GELU()  # non-linearity
-        self.up_project = nn.Linear(adapter_size, hidden_size)    # b -> d
+        self.down_project = nn.Linear(hidden_size, adapter_size)  # down projection
+        self.activation = nn.ReLU()  # non-linearity
+        self.up_project = nn.Linear(adapter_size, hidden_size)    # up projection
         self.dropout = nn.Dropout(dropout_rate)
         self.layer_norm = nn.LayerNorm(hidden_size)
         
         # Initialize adapter weights — not learned from pretraining, so good init is important!
-        nn.init.xavier_uniform_(self.down_project.weight)
+        nn.init.kaiming_uniform_(self.down_project.weight)
         nn.init.zeros_(self.down_project.bias)
-        nn.init.xavier_uniform_(self.up_project.weight)
+        nn.init.kaiming_uniform_(self.up_project.weight)
         nn.init.zeros_(self.up_project.bias)
 
     def forward(self, hidden_states):
@@ -71,11 +69,7 @@ class BottleneckAdapter(nn.Module):
         output = self.layer_norm(output)
         return output
 
-
 class AdapterTransformerLayer(nn.Module):
-    """
-    Wraps a DistilBERT TransformerBlock with adapters.
-    """
     def __init__(self, transformer_layer, adapter_size):
         super().__init__()
         self.layer = transformer_layer
@@ -92,7 +86,7 @@ class AdapterTransformerLayer(nn.Module):
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
         # DistilBERT forward: attention -> add & norm -> ffn -> add & norm
 
-        # 1. Attention sublayer
+        # Attention sublayer
         sa_output = self.layer.attention(
             hidden_states, 
             attn_mask=attention_mask, 
@@ -105,7 +99,7 @@ class AdapterTransformerLayer(nn.Module):
         # Adapter after attention
         sa_output = self.attention_adapter(sa_output)
 
-        # 2. FFN sublayer
+        # FFN sublayer
         ffn_output = self.layer.ffn(sa_output)
         ffn_output = self.layer.output_layer_norm(ffn_output + sa_output)
 
@@ -114,11 +108,15 @@ class AdapterTransformerLayer(nn.Module):
 
         return output
 
+def get_adapters_model(base_model, adapter_size=64):
+    for i in range(len(base_model.transformer.layer)):
+        original_layer = base_model.transformer.layer[i]
+        base_model.transformer.layer[i] = AdapterTransformerLayer(original_layer, adapter_size)
+    
+    classification_model = ClassificationModel(base_model)
+    return classification_model
 
 class LoRALayer(nn.Module):
-    """
-    LoRA implementation for linear layers.
-    """
     def __init__(self, in_features, out_features, rank=8, alpha=32):
         super().__init__()
         self.rank = rank
@@ -136,11 +134,7 @@ class LoRALayer(nn.Module):
         # LoRA contribution: scaling * (x @ A) @ B
         return self.scaling * (x @ self.lora_A) @ self.lora_B
 
-
 class LoRALinear(nn.Module):
-    """
-    Wraps a pre-trained linear layer with LoRA functionality.
-    """
     def __init__(self, linear_layer, rank=8, alpha=32):
         super().__init__()
         self.linear = linear_layer
@@ -162,59 +156,8 @@ class LoRALinear(nn.Module):
         # Combine original output with LoRA contribution
         return self.linear(x) + self.lora(x)
 
-
-# Functions to Retrieve Different Fine-Tuning Models
-
-def get_full_classification_model(base_model):
-    """
-    Adds a classification head to a base model for full fine-tuning.
-    All parameters of the base model and the new head are trainable.
-    """
-    model = ClassificationModel(base_model)
-    return model
-
-
-def get_classification_head_model(base_model):
-    """
-    Adds a classification head and freezes the base model, so only
-    the parameters of the new head are trainable.
-    """
-    for param in base_model.parameters():
-        param.requires_grad = False
-        
-    model = ClassificationModel(base_model)
-    return model
-
-
-def get_adapters_model(base_model, adapter_size=64):
-    """
-    Replaces each layer in the base model with an AdapterTransformerLayer,
-    which includes trainable bottleneck adapters. The base model's
-    parameters are frozen.
-    """
-    # Create a new, modified base model with adapters
-    for i in range(len(base_model.transformer.layer)):
-        original_layer = base_model.transformer.layer[i]
-        # Replace the original layer with the new adapter-wrapped layer
-        base_model.transformer.layer[i] = AdapterTransformerLayer(original_layer, adapter_size)
-    
-    # Add the classification head to the modified base model
-    classification_model = ClassificationModel(base_model)
-    return classification_model
-
-
 def get_lora_model(base_model, rank=8, alpha=32, target_modules=["q_lin", "v_lin"]):
-    """
-    Applies LoRA to specific modules in a transformer model,
-    making only the LoRA weights trainable.
-    
-    Args:
-        base_model: A Hugging Face transformer model
-        rank: Rank for LoRA decomposition
-        alpha: Scaling factor
-        target_modules: List of module names to apply LoRA to.
-    """
-    # Freeze all parameters
+    # First, freeze all parameters
     for param in base_model.parameters():
         param.requires_grad = False
     
@@ -222,7 +165,7 @@ def get_lora_model(base_model, rank=8, alpha=32, target_modules=["q_lin", "v_lin
     for name, module in base_model.named_modules():
         if any(target_name in name for target_name in target_modules):
             if isinstance(module, nn.Linear):
-                # Get the parent module and child name to set the attribute
+                # Get the parent module
                 parent_name = '.'.join(name.split('.')[:-1])
                 child_name = name.split('.')[-1]
                 parent_module = base_model.get_submodule(parent_name)
@@ -231,6 +174,7 @@ def get_lora_model(base_model, rank=8, alpha=32, target_modules=["q_lin", "v_lin
                 lora_layer = LoRALinear(module, rank=rank, alpha=alpha)
                 setattr(parent_module, child_name, lora_layer)
     
-    #  Add the classification head to the modified base model
     classification_model = ClassificationModel(base_model)
     return classification_model
+
+
