@@ -12,7 +12,7 @@ class ClassificationModel(nn.Module):
         
         self.base_model = base_model
         self.dropout = nn.Dropout(0.1)
-        self.linear = nn.Linear(768, 2) # output features from bert is 768 and 2 is number of labels
+        self.linear = nn.Linear(768, 2) # output features from BERT is 768 and 2 is number of labels
         
     def forward(self, input_ids, attn_mask):
         
@@ -28,6 +28,7 @@ def get_full_classification_model(base_model):
 
     return model
 
+
 def get_classification_head_model(base_model):
     # Freeze all parameters
     for param in base_model.parameters():
@@ -36,7 +37,7 @@ def get_classification_head_model(base_model):
     model = ClassificationModel(base_model)
 
     return model
-
+    
 
 class BottleneckAdapter(nn.Module):
     def __init__(self, hidden_size, adapter_size, dropout_rate=0.1):
@@ -73,7 +74,7 @@ class AdapterTransformerLayer(nn.Module):
     def __init__(self, transformer_layer, adapter_size):
         super().__init__()
         self.layer = transformer_layer
-        self.hidden_size = transformer_layer.attention.q_lin.in_features
+        self.hidden_size = transformer_layer.attention.self.query.in_features
 
         # Freeze the original transformer block
         for param in self.layer.parameters():
@@ -84,7 +85,7 @@ class AdapterTransformerLayer(nn.Module):
         self.ffn_adapter = BottleneckAdapter(self.hidden_size, adapter_size)
 
     def forward(self, hidden_states, attention_mask=None, head_mask=None):
-        # DistilBERT forward: attention -> add & norm -> ffn -> add & norm
+        # BERT forward: attention -> add & norm -> ffn -> add & norm
 
         # Attention sublayer
         sa_output = self.layer.attention(
@@ -109,12 +110,14 @@ class AdapterTransformerLayer(nn.Module):
         return output
 
 def get_adapters_model(base_model, adapter_size=64):
-    for i in range(len(base_model.transformer.layer)):
-        original_layer = base_model.transformer.layer[i]
-        base_model.transformer.layer[i] = AdapterTransformerLayer(original_layer, adapter_size)
+    for i in range(len(base_model.encoder.layer)):
+        original_layer = base_model.encoder.layer[i]
+        base_model.encoder.layer[i] = AdapterTransformerLayer(original_layer, adapter_size)
     
     classification_model = ClassificationModel(base_model)
     return classification_model
+
+
 
 class LoRALayer(nn.Module):
     def __init__(self, in_features, out_features, rank=8, alpha=32):
@@ -133,6 +136,7 @@ class LoRALayer(nn.Module):
     def forward(self, x):
         # LoRA contribution: scaling * (x @ A) @ B
         return self.scaling * (x @ self.lora_A) @ self.lora_B
+
 
 class LoRALinear(nn.Module):
     def __init__(self, linear_layer, rank=8, alpha=32):
@@ -156,7 +160,8 @@ class LoRALinear(nn.Module):
         # Combine original output with LoRA contribution
         return self.linear(x) + self.lora(x)
 
-def get_lora_model(base_model, rank=8, alpha=32, target_modules=["q_lin", "v_lin"]):
+
+def get_lora_model(base_model, rank=8, alpha=32, target_modules=["query", "value"]):
     # First, freeze all parameters
     for param in base_model.parameters():
         param.requires_grad = False
@@ -176,5 +181,8 @@ def get_lora_model(base_model, rank=8, alpha=32, target_modules=["q_lin", "v_lin
     
     classification_model = ClassificationModel(base_model)
     return classification_model
+
+
+
 
 
