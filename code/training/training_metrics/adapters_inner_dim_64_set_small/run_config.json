@@ -1,0 +1,10 @@
+{
+  "model_name": "adapters_inner_dim_64_set_small",
+  "epochs": 15,
+  "lr": 0.001,
+  "num_labels": 2,
+  "max_length": 512,
+  "trainable_params": 2380802,
+  "total_params": 111863042,
+  "device": "cuda"
+}

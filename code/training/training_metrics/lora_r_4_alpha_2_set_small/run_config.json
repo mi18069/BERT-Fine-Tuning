@@ -1,0 +1,10 @@
+{
+  "model_name": "lora_r_4_alpha_2_set_small",
+  "epochs": 15,
+  "lr": 0.001,
+  "num_labels": 2,
+  "max_length": 512,
+  "trainable_params": 148994,
+  "total_params": 109631234,
+  "device": "cuda"
+}

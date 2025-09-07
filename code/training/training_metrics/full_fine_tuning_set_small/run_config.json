@@ -1,0 +1,10 @@
+{
+  "model_name": "full_fine_tuning_set_small",
+  "epochs": 15,
+  "lr": 2e-05,
+  "num_labels": 2,
+  "max_length": 512,
+  "trainable_params": 109483778,
+  "total_params": 109483778,
+  "device": "cuda"
+}
