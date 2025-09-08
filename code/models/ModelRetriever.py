@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from transformers import AutoModel
+from copy import deepcopy
 
 class ClassificationModel(nn.Module):
     def __init__(self, base_model):
@@ -14,13 +15,15 @@ class ClassificationModel(nn.Module):
         self.dropout = nn.Dropout(0.1)
         self.linear = nn.Linear(768, 2) # output features from BERT is 768 and 2 is number of labels
         
-    def forward(self, input_ids, attn_mask):
-        
-        last_hidden_state = self.base_model(input_ids, attention_mask=attn_mask).last_hidden_state
+    def forward(self, input_ids, attention_mask):
+        outputs = self.base_model(input_ids, attention_mask=attention_mask, return_dict=True)
+        last_hidden_state = outputs.last_hidden_state
         cls_embedding = last_hidden_state[:, 0, :]   # Take [CLS] token representation
         x = self.dropout(cls_embedding)
         logits = self.linear(x) 
+
         return logits
+        
 
 def get_full_classification_model(base_model):
     # Simply add classification head
@@ -39,81 +42,84 @@ def get_classification_head_model(base_model):
     return model
     
 
-class BottleneckAdapter(nn.Module):
-    def __init__(self, hidden_size, adapter_size, dropout_rate=0.1):
+class AdapterModule(nn.Module):
+    def __init__(self, in_feature, adapter_size=64):
         super().__init__()
+
+        self.proj_down = nn.Linear(in_features=in_feature, out_features=adapter_size)
+        self.proj_up = nn.Linear(in_features=adapter_size, out_features=in_feature)
         
-        self.down_project = nn.Linear(hidden_size, adapter_size)  # down projection
-        self.activation = nn.ReLU()  # non-linearity
-        self.up_project = nn.Linear(adapter_size, hidden_size)    # up projection
-        self.dropout = nn.Dropout(dropout_rate)
-        self.layer_norm = nn.LayerNorm(hidden_size)
-        
-        # Initialize adapter weights — not learned from pretraining, so good init is important!
-        nn.init.kaiming_uniform_(self.down_project.weight)
-        nn.init.zeros_(self.down_project.bias)
-        nn.init.kaiming_uniform_(self.up_project.weight)
-        nn.init.zeros_(self.up_project.bias)
+        # Setting initial values to 0 in order not to interfere with models existing knowledge
+        nn.init.zeros_(self.proj_up.weight)
+        nn.init.zeros_(self.proj_up.bias)
 
-    def forward(self, hidden_states):
-        # Store original input for residual connection
-        residual = hidden_states
+    def forward(self, x):
+        return self.proj_up(F.relu(self.proj_down(x))) + x
 
-        # Apply adapter: down-project -> non-linear -> up-project -> dropout
-        x = self.down_project(hidden_states)
-        x = self.activation(x)
-        x = self.up_project(x)
-        x = self.dropout(x)
-
-        # Add residual and normalize
-        output = residual + x
-        output = self.layer_norm(output)
-        return output
-
-class AdapterTransformerLayer(nn.Module):
-    def __init__(self, transformer_layer, adapter_size):
+class BertLayerWithAdapters(nn.Module):
+    def __init__(self, base_layer, adapter_size=64):
         super().__init__()
-        self.layer = transformer_layer
-        self.hidden_size = transformer_layer.attention.self.query.in_features
 
-        # Freeze the original transformer block
-        for param in self.layer.parameters():
-            param.requires_grad = False
+        self.base_layer = deepcopy(base_layer)
+        self.adapter_size = adapter_size
+        hidden_size = self.base_layer.output.dense.out_features
+        self.attention_adapter = AdapterModule(hidden_size, adapter_size)
+        self.ffn_adapter = AdapterModule(hidden_size, adapter_size)
 
-        # Add adapters
-        self.attention_adapter = BottleneckAdapter(self.hidden_size, adapter_size)
-        self.ffn_adapter = BottleneckAdapter(self.hidden_size, adapter_size)
+    def forward(
+        self,
+        hidden_states,
+        attention_mask=None,
+        head_mask=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        past_key_values=None,
+        output_attentions=False,
+        cache_position=None,
+    ):
 
-    def forward(self, hidden_states, attention_mask=None, head_mask=None):
-        # BERT forward: attention -> add & norm -> ffn -> add & norm
-
-        # Attention sublayer
-        sa_output = self.layer.attention(
-            hidden_states, 
-            attn_mask=attention_mask, 
-            head_mask=head_mask
+        # Call the base layer's attention sub-module
+        sa_output = self.base_layer.attention(
+            hidden_states,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            past_key_values=past_key_values,
+            output_attentions=output_attentions,
         )[0]
+        
+        # Apply the attention adapter and add its output to the residual path
+        adapter_attention_output = self.attention_adapter(sa_output)
+        attention_output = hidden_states + sa_output + adapter_attention_output
+        attention_output = self.base_layer.output.LayerNorm(attention_output)
 
-        # Add + Norm (frozen)
-        sa_output = self.layer.sa_layer_norm(sa_output + hidden_states)
-
-        # Adapter after attention
-        sa_output = self.attention_adapter(sa_output)
-
-        # FFN sublayer
-        ffn_output = self.layer.ffn(sa_output)
-        ffn_output = self.layer.output_layer_norm(ffn_output + sa_output)
-
-        # Adapter after FFN
-        output = self.ffn_adapter(ffn_output)
-
-        return output
+        # Call the base layer's feedforward sub-modules
+        intermediate_output = self.base_layer.intermediate(attention_output)
+        ffn_output = self.base_layer.output.dense(intermediate_output)
+        
+        # Apply the FFN adapter and add its output to the residual path
+        adapter_ffn_output = self.ffn_adapter(ffn_output)
+        layer_output = attention_output + ffn_output + adapter_ffn_output
+        layer_output = self.base_layer.output.LayerNorm(layer_output)
+        
+        # The return value should match the original BERT layer's output format
+        return (layer_output, ) + self.base_layer.attention(
+            hidden_states,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            past_key_values=past_key_values,
+            output_attentions=output_attentions,
+        )[1:]
 
 def get_adapters_model(base_model, adapter_size=64):
-    for i in range(len(base_model.encoder.layer)):
-        original_layer = base_model.encoder.layer[i]
-        base_model.encoder.layer[i] = AdapterTransformerLayer(original_layer, adapter_size)
-    
+    for i, layer in enumerate(base_model.encoder.layer):
+        base_model.encoder.layer[i] = BertLayerWithAdapters(layer, adapter_size=64)
+        
+    for name, param in base_model.named_parameters():
+        param.requires_grad = False
+    for name, param in base_model.named_parameters():
+        if "attention_adapter" in name or "ffn_adapter" in name:
+            param.requires_grad = True
+            
     classification_model = ClassificationModel(base_model)
     return classification_model
 

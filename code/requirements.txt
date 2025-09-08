@@ -1,0 +1,7 @@
+transformers
+torch
+scikit-learn
+datasets
+huggingface_hub
+python-dotenv
+
