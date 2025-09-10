@@ -1,7 +1,7 @@
 {
-  "model_name": "adapters_inner_dim_64_set_full",
-  "epochs": 5,
-  "lr": 0.001,
+  "model_name": "adapters_inner_dim_96_set_full",
+  "epochs": 4,
+  "lr": 0.0001,
   "num_labels": 2,
   "max_length": 512,
   "trainable_params": 2380802,

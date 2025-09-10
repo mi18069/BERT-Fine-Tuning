@@ -1,7 +1,7 @@
 {
   "model_name": "head_fine_tuning_set_small",
-  "epochs": 15,
-  "lr": 0.002,
+  "epochs": 5,
+  "lr": 0.0001,
   "num_labels": 2,
   "max_length": 512,
   "trainable_params": 1538,

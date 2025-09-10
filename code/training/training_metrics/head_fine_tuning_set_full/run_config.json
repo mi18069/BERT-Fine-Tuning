@@ -1,6 +1,6 @@
 {
   "model_name": "head_fine_tuning_set_full",
-  "epochs": 5,
+  "epochs": 4,
   "lr": 0.0001,
   "num_labels": 2,
   "max_length": 512,

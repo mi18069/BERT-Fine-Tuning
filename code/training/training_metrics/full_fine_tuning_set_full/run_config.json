@@ -1,7 +1,7 @@
 {
   "model_name": "full_fine_tuning_set_full",
-  "epochs": 5,
-  "lr": 2e-05,
+  "epochs": 4,
+  "lr": 1e-05,
   "num_labels": 2,
   "max_length": 512,
   "trainable_params": 109483778,
