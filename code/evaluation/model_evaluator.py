@@ -4,10 +4,12 @@
 import torch
 import json
 import os
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support, classification_report, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score, precision_recall_fscore_support, classification_report,
+    confusion_matrix, roc_curve, auc, precision_recall_curve
+)
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 
 
 class ModelEvaluator:
@@ -68,7 +70,4 @@ class ModelEvaluator:
         with open(filepath, 'w') as f:
             json.dump(self.results, f, indent=4)
         print(f"Saved evaluation results to {filepath}")
-
-
-
-
+        
