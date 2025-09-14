@@ -7,7 +7,11 @@ project/
 |
 |--- Model_Training.ipynb	#Notebook that demonstrates the process of fine-tuning models
 |
+|--- Model_Evaluation.ipynb	#Notebook that demonstrates the process of evaluating models
+|
 |--- datasets/				# Loaded and saved raw and data ready for models
+|
+|--- hf_utils	# utilities for manipulating data from HuggingFace
 |
 |--- models/
 |    |--- Fine_tuning_models.ipynb	# Notebook that demonstrates and analize implementation of different fine-tuned models
@@ -20,6 +24,5 @@ project/
 |    |--- training_evaluator.ipynb	# Evaluates training process
 |    |--- model_evaluator.ipynb		# Provides class for evaluation of models and saving results 
 |    |--- evaluation_metrics/		# Saved metrics of evaluation
-|
-|--- hf_utils	# utilities for manipulating data from HuggingFace
+
 

@@ -317,43 +317,6 @@ Drugi zadatak na kojem se BERT model trenirao je predviđanje sledeće rečenice
 Model je treniran na ogromnim tekstualnim korpusima sa ciljem da obuhvati što širi spektar jezičkih stilova i domena. Konkretno, korišćen je BookCorpus skup podataka koji sadrži oko 800 miliona reči iz više od 11 000 knjiga različitih žanrova, kao i engleska verzija Vikipedije koja obuhvata oko 2.5 milijarde reči iz više od 2.5 miliona članaka.
 
 
-\subsection{DistilBERT model}
-Iako je BERT model postigao značajne rezultate, njegov nedostatak je veličina i složenost samog modela. Za potrebe nekih zadataka mogu se priuštiti malo lošije performanse zarad skladištenja manjeg modela i povećanja brzine obrade zahteva. Za takve potrebe je 2019. godine predstavljen DistilBERT\cite{DistilBERT} model. Kao što i sugestira njegovo ime, ovaj model dobijen je od originalnog procesom destilacije znanja.
-
-Destilacija znanja(eng. Knowledge distillation) \cite{ModelDistillation} je tehnika kompresije modela u kojoj se manji model - student (eng. student model) trenira da reprodukuje ponašanje većeg, kompleksnijeg modela - učitelja (eng. teacher model). Model učitelj je tipično istreniran da daje dobre rezultate za specifičan zadatak. Model student uči na osnovu njega tako što se trudi da minimizuje svoje izlaze sa izlazima generisanim od učitelja, često koristeći meke labele, gde su vrednosti za svaku u rasponu [0,1], umesto tvrdih labela (vrednosti strogo {0, 1}). Ovaj proces omogućava manjem i bržem studentu da dostigne znanje i sposobnost generalizacije kompleksnijeg modela. 
-
-\begin{table}[h!]
-	\centering
-	\begin{tabular}{|c|c|c|}
-		\hline
-		Model & IMDb (Accuracy) & SQuAD (EM/F1) \\
-		\hline
-		BERT & 93.46 & 81.2 / 88.5 \\
-		DistilBERT & 92.82 & 77.7 / 85.8 \\
-		\hline
-	\end{tabular}
-	\caption{Upoređivanje na zadacima: IMDB(test accuracy) i SQuAD (EM/F1 mera na validacionom skupu)}
-	\label{tab:bert_vs_distilbert_acc}
-\end{table}
-
-\begin{table}[h!]
-	\centering
-	\begin{tabular}{|c|c|c|}
-		\hline
-		Model & \#param. (Millions) & Inf. time (seconds) \\
-		\hline
-		ELMo & 180 & 895\\
-		BERT & 110 & 668 \\
-		DistilBERT & 66 & 410 \\
-		\hline
-	\end{tabular}
-	\caption{Upoređivanje veličina modela i vreme potrebno za kompletan prolaz kroz GLUE STS-B zadatke na CPU gde je batch size 1}
-	\label{tab:bert_vs_distilbert_params}
-\end{table}
-
-Prilikom pravljenja destilovane verzije osnovnog BERT modela, najznačajnija promena je smanjenje broja transformer slojeva sa 12 na 6. Time DistilBERT ima približno 40\% manje parametara (66 miliona naspram 110 miliona) i ostvaruje oko 60\% brže izvršavanje, pritom zadržavajući 97\% performansi originalnog modela. Kao testni primeri za proveru sposobnosti ovih modela, korišćen je zadatak klasifikacije nad skupovima IMDB, koji se koristi za analizu sentimenta, gde se testira tačnost modela, kao i skup SQuAD, koji predstavlja zadatak odgovaranja na pitanje, a testira EM/F1 metriku na validacionom skupu. Rezultati ovih eksperimenata dati su u tabeli~\ref{tab:bert_vs_distilbert_acc}. Kao pokazatelj vremena potrebnog za obradu zahteva, koriščen je GLUE STS-B zadatak (mera semantičke sličnosti rečenica). U tabeli \ref{tab:bert_vs_distilbert_params} u kolonama su predstavljeni broj parametara modela, kao i vreme obrade svih zahteva.
-
-
 \section{Problem analize sentimenta}
 
 Problem analize sentimenta (eng. Sentiment analysis) predstavlja zadatak klasifikacije teksta u kojima je cilj odrediti da li odražava pozitivno ili negativno mišljenje o nekoj temi. Zbog svoje jednostavnosti za shvatanje, velike količine skupova podataka koja se može pronaći iz različitih oblasti, kao i različitih mogućnosti za generisanje cilja, ovaj problem predstavlja jedan od najosnovnijih koji se koriste u svrhu testiranja rezonovanja jezičkih modela. Skupovi tekstova mogu poticati iz različitih izvora, kao što su internet forumi, ocene proizvoda poručenih preko interneta, komentari na društvenim mrežava, ocene filmova... Kao cilj klasifikacije česte su podele na dve (pozitivno ili negativno) ili  tri (pozitivno, negativno ili neutralno) klase, a moguće je i na izlazu generisati brojčanu vrednost (na primer ocena od 1 do 10, gde 1 predstavlja najlošiju ocenu, a 10 najbolju).
@@ -460,7 +423,25 @@ U praksi ovaj pristup se često koristi za klasifikacione zadatke poput analize 
 \section {Fino podešavanje zasnovano na adapterima}
 Adapteri predstavljaju jednu od najznačajnijih tehnika parametarski efikasnog prilagođavanja jezičkih modela. Oni uvode male dodatne neuralne module - adapterske slojeve (eng. Adapter layers) unutar već postojećih (npr. između feed-forward slojeva u transformeru), pri čemu se samo oni treniraju, dok originalna mreža ostaje nepromenjena. Ovime se ostvaruje kompromis između potpunog fine-tuninga i prilagođavanja samo klasifikacione glave \cite{AdaptersTechnique}.
 
-Tipična arhitektura adaptera uključuje takozvanu "usko grlo" arhitekturu (eng. bottleneck architecture), pri kojoj se ulazni vektor projektuje u prostor manje dimenzionalnosti, prolazi kroz nelinearnu transformaciju i vraća nazad u originalan prostor. Ova redukcija smanjuje broj parametara koje je potrebno trenirati i omogućava efikasno učenje specifičnih karakteristika zadatka. Primer arhitekture dat je na slici 3.1, a preuzet je iz rada Parameter-Efficient Transfer Learning for {NLP}\cite{AdaptersTechnique}.
+Tipična arhitektura adaptera uključuje takozvanu "usko grlo" arhitekturu (eng. bottleneck architecture), pri kojoj se ulazni vektor projektuje u prostor manje dimenzionalnosti, prolazi kroz nelinearnu transformaciju i vraća nazad u originalan prostor. Formula koja ovo opisuje je:
+\begin{equation}
+	f_{adapter}(x) = W_{up}g(W_{down}x + b_{down}) + b_{up},
+\end{equation}
+gde su
+\begin{description}
+	\item \(W_{down} \in R^{r \times d}\) - matrica koja preslikava originalnu dimenzionalnost u manju (r << d), praveći "usko grlo"
+	\item \(W_{up} \in R^{d \times r}\) - matrica koja vraća vektor iz niže dimenzionalnost u originalan prostor
+	\item \(g(\dot)\) - nelinearna funkcija (najčešće ReLU) 
+	\item \(b_{down}\) - vektor pomeraja (bias) unutrašnje dimenzije r
+	\item \(b_{up}\) - vektor pomeraja originalne dimenzije d 
+\end{description} 
+
+Ovako definisan modul ubacuje se u model uz rezidualnu konekciju
+\begin{equation}
+	h_{out} = x + f_{adapter}x
+\end{equation}
+
+Ova redukcija smanjuje broj parametara koje je potrebno trenirati na samo \( W_{up}, W_{down}, b_{up} i b_{down}\), što predstavlja \(O(d \dot r)\) parametara za treniranje, omogućavajući efikasno učenje specifičnih karakteristika zadatka. Primer arhitekture dat je na slici 3.1, a preuzet je iz rada Parameter-Efficient Transfer Learning for {NLP}\cite{AdaptersTechnique}.
 
 \begin{figure}[!ht]
 	\centering
@@ -468,6 +449,8 @@ Tipična arhitektura adaptera uključuje takozvanu "usko grlo" arhitekturu (eng.
 	\includegraphics[width=0.9\textwidth]{Adapters_Example.png}
 	\caption{Primer arhitekture zasnovanog na adapterima. Feedforward up/down-project predstavljaju funkcije koje vektor preslikavaju u prostor više/niže dimenzionalnosti. }
 \end{figure}
+
+Implementacija adaptera u modelima najčešće je ostvarena kroz ubacivanje modula u dve tačke unutar svakog BERT transformer sloja: nakon self-attention izlaza i nakon feedforward izlaza. Ovo predstavlja implementaciju originalne Houlsby \cite{AdaptersTechnique} arhitekture. Alternativni pristup je predložen od strane Pfeiffer-a \cite{pfeiffer2020adapterapplications} koji sugeriše dodavanje adaptera samo nakon attention sloja, kako bi se napravila dodatna ušteda parametara za treniranje, dok su eksperimenti pokazali da se pri tome ne gubi značajno na preciznosti. 
 
 Osnovna prednost ovog pristupa je parametarska i memorijska efikasnost. Kod adaptera dovoljno je čuvanje samo parametara dodatnih slojeva, čime se troškovi skladištenja i isporučivanja drastično smanjuju. Takođe, dodavanje malih modula, specifičnih za određene zadatke čine ih pogodnim za scenarije sa više zadataka ili domena, čineći ih fleksibilnijim u odnosu na samo prilagođavanje klasifikacione glave.
 
@@ -569,65 +552,94 @@ Još jedan od problema je i međusoban uticaj različitih metoda finog podešava
 \chapter{Implementacija rešenja}
 Praktična implementacija rešenja zasniva se na korišćenju unapred treniranog jezičkog modela DistilBERT dostupnog preko platforme Hugging Face Transformers \cite{Huggingface2023}. Ovaj model moguće je trenirati za potrebe rešavanja različitih zadataka, ali u ovom radu biće korišćen za rešavanje problema analize sentimenta, što predstavlja problem binarne klasifikacije teksta. Da bi model mogao uspešno da se koristi u ovu svrhu, neophodno je dodati na njega izlazni sloj, u ovom slučaju za potrebe binarne klasifikacije.
 
-Preuzimanje baznog modela DistilBert vrši se pomoću metode \begin{verbatim}
-	AutoModel.from_pretrained("distilbert-base-uncased", torch_dtype=torch.float32)
+Preuzimanje baznog BERT modela vrši se pomoću metode \begin{verbatim}
+	AutoModel.from_pretrained("bert-base-uncased")
 \end{verbatim}
-AutoModel je deo \textit{transformers} biblioteke i često je korišćen za dobavljanje različitih modela sa HF platforme. Parametar "distilbert-base-uncased" predstavlja DistilBERT model koji uvozimo, base predstavlja njegovu osnovnu verziju, dok "uncased" označava da model ne uzima u obzir razliku između velikih i malih slova (za ove potrebe koristi se "cased" verzija modela). Argument \(torch_type=torch.float32\) označava da će ovaj model raditi sa PyTorch bibliotekama \cite{pytorch}.    
+AutoModel je deo \textit{transformers} biblioteke i često je korišćen za dobavljanje različitih modela sa HF platforme. Parametar "distilbert-base-uncased" predstavlja DistilBERT model koji uvozimo, base predstavlja njegovu osnovnu verziju, dok "uncased" označava da model ne uzima u obzir razliku između velikih i malih slova (za ove potrebe koristi se "cased" verzija modela). Moguće je koristiti i biblioteku \i{AutoModelForClassificationHead} sa istom metodom i argumentima koja vraća istreniran model posebno namenjen za primenu nad klasifikacionim zadacima, međutim, ovo predstavlja sistematičniji način za upoznavanje sa strukturom modela.
 
 U svakoj od implementacija modela, na ovako dobijen model dodaje se klasifikaciona glava kako bi se model prilagodio za rešavanje konkretnog problema. Ovo je ostvareno dodavanjem linearnog modula koji uzima vektor dužine 768, što predstavlja unutrašnju dimenziju poslednjeg sloja DistilBERT modela i transformiše u dimenziju veličine 2 za potrebe binarne klasifikacije. 
 
-Još jedna zajednička stvar koju svaka verzija fine-tuninga koristi je preopterećivanje funkcije forward(), koja se nalazi unutar svakog modula koji dodajemo korišćenjem torch.nn.Module klase \cite{pytorch_nn_module}. Ova funkcija je ključna komponenta u prolasku podataka kroz mrežu jer se u njoj definiše na koji način se ulazni podaci obrađuju i dalje prosleđuju sledećem sloju.  
+Još jedna zajednička stvar koju svaka verzija fine-tuninga koristi je preopterećivanje funkcije forward(), koja se nalazi unutar svakog modula koji dodajemo korišćenjem torch.nn.Module klase \cite{pytorch_nn_module}. Ova funkcija je ključna komponenta svake klase izvezene iz \texttt{torch.nn.Module} i odgovorna je za prolazak informacija kroz mrežu jer se u njoj definiše na koji način se ulazni podaci obrađuju i dalje prosleđuju sledećem sloju u obradi.  
+
+Svi modeli trenirani su na tri različite dimenzije Large Movie Review seta podataka. Oni sadrže 100, 1 000 i 22 500 instanci za treniranje i redom 10, 100 i 2 500 instanci na skupu za validaciju. Trening skup čini 25 000 instanci sa kojima model nije upoznat.
 
 \section{Implementacija potpunog finog podešavanja}
-\section{Implementacija finog podešavanja klasifikacione glave}
-\section{Implementacija finog podešavanja zasnovanog na adapterima}
-\section{Implementacija finog podešavanja zasnovanog na matricama niskog ranga}
-- Dodavanje i prilagodjavanje dodatnog sloja
-- Nema totalnog zaboravljanja
-- Potrebne postojece tezine
-- Zamrzavanje postojecih tezina
-- postavljanje adaptera
-- postoji from peft import LoraConfig
-- 
+Implementacija potpunog finog podešavanja je direktno odrađena jednostavnim dodavanjem poslednjeg sloja na postojeći pretrenirani BERT model. U taj poslednji sloj dodaje se Dropout sloj sa stopom od 0.1 radi regularizacije i smanjenja rizika od prenaučenosti. Linearni sloj mapira skriveni sloj - dimenzije 768 u slučaju BERT-a u prostor dimenzije 2, što odgovara binarnoj klasifikaciji (pozitivno/negativno). 
 
+Ulaz u klasifikacionu glavu predstavlja vektor CLS tokena (eng. classification token). Ovaj token je specijalni simbol koji se na početku dodaje svakoj sekvenci prilikom obrade u BERT arhitekturi. Njegova skrivena reprezentacija nakon prolaska kroz poslednji sloj mreže koristi se kao agregatna reprezentacija čitave sekvence, pa je samim tim pogodna za zadatke klasifikacije na nivou rečenice ili dokumenta. 
+
+Ovako implementiran model sadrži oko 110 miliona parametara, od kojih su svi postavljeni za treniranje. 
+
+\section{Implementacija finog podešavanja klasifikacione glave}
+Implementacija ovog metoda fine-tuninga zasniva se na sličnoj ideji kao i za potpuno fino podešavanje, sa razlikom u tome što se svi unutrašnji slojevi modela zavrzavaju i nisu podložni za treniranje. Za treniranje se koriste samo parametri koji se nalaze u poslednjem sloju. U slučaju BERT modela, u pitanju je 1538 parametara (768 parametara poslednjeg izlaznog sloja * 2 - dimenzija izlaznog sloja u binarnoj klasifikaciji), što predstavlja 0.000014\% ukupnog proja parametara. 
+
+\section{Implementacija finog podešavanja zasnovanog na adapterima}
+
+Pristup zasnovan na adapterima pri treniranju BERT modela zasniva se na ubacivanju instanca klase AdapterModule koja implementiraju jednostavnu kompoziciju  funkcija za projekciju ulaznog vektora dimenzije 768 u vektor niže dimenzionalnosti, primenu ReLU funkcije i ponovnu projekciju nazad u originalnu dimenzionalnost. U ovoj implementaciji, primenjuje se Houlsby arhitektura u kojoj se adapteri stavljaju i posle attention i posle feedforward sloja u mreži.
+
+Normalizacija (LayerNorm) koristi se nakon dodavanja adaptera na rezidualnu putanju. Njena osnovna uloga je stabilizacija treniranja, jer normalizacijom izlaza smanjuje varijansu vrednosti koje prolaze kroz mrežu i time smanjuje šansu od eksplodirajućih ili nestajućih gradijenata. U kontekstu adaptera, normalizacija obezbeđuje da doavanje novih slojeva za treniranja ne naruši balans reprezentacija koje su već naučene u pretreniranom modelu. Ovo uz inicijalno postavljanje težina u up-projekciji obezbeđuje kontrolisanu integraciju novih parametara u postojeću arhitekturu.
+
+Implementacijom adaptera broj parametara za treniranje je 2 380 802, što čini 2.13\% od ukupnog broja parametara modela. Model je obučavan u zavisnosti od unutrašnje dimenzionalnosti korišćene u adapterima, gde uzimaju vrednosti 64 i 128.
+
+\section{Implementacija finog podešavanja zasnovanog na matricama niskog ranga}
+Implementacija ove vrste finog podešavanja izvedena je kroz dve klase: LoRALayer i LoRALinear.
+
+Klasa LoraLayer definiše niskorangiranu aproksimaciju linearne transformacije pomoću dve matrice $A$ - dimenzija \(in\_features \times r\) i $B$ - dimenzija \(r \times out\_features\), gde $r$  predstavlja rang, a druge dve promenljive originalne dimenzije osnovne matrice. Na izlazu se LoRA doprinos računa prema formuli:
+
+\begin{equation}
+	\Delta h(x) = \frac{\alpha}{r} (xA)B,
+\end{equation}
+gde je \(\alpha\) faktor skaliranja doprinosa. 
+
+U inicijalizaciji, matrica $A$ se inicijalizuje pomoću Kaiming\cite{he2015delving} uniformne raspodele koja omogućava stabilian tok gradijenta kroz ReLU aktivacije, dok je matrica $B$ inicijalizovana nulama. Na ovaj način obezbeđuje se zadržavanje osnovnim svojstava pretreniranog modela uz mogućnost naknadnog doprinosa LoRA slojeva tokom treniranja.
+
+Klasa LoRALinear obmotava postojeći sloj tako da se originalne težine zamrzavaju, dok se ostatak koristi kao doprinos u učenju. Izlaz iz ovog sloja formira se kao suma originalnog linearnog sloja i LoRA komponente. Na ovaj način model uči samo matrice $A$ i $B$ čime se postiže značajno smanjenje broja trenirajućih parametara, na ukupno 296 450, što predstavlja 0.26\% ukupnog broja parametara.
 
 \chapter{Poređenje rezultata}
-\section{Upoređivanje memorijske složenosti}
+
+
 \section{Upoređivanje vremenske složenosti}
+\begin{table}[h!]
+	\centering
+	\setlength{\tabcolsep}{12pt}
+	\renewcommand{\arraystretch}{3}
+	\begin{tabular}{|c|c|c|c|} 
+		\hline
+		Set / Model & Small & Medium & Large \\
+		\hline
+		Full fine-tuning & 2.94 & 21.54 & 520.97 \\ 
+		\hline
+		Adapters fine-tuning & 3.54 & 20.66 & 500.38 \\ 
+		\hline
+		LoRA fine-tuning & 2.40 & 17.15 & 404.23 \\ 
+		\hline
+		Head fine-tuning & 0.98 & 7.99 & 190.27 \\ 
+		\hline
+	\end{tabular}
+	\caption{Prosečno vreme izvršavanja u sekundama jedne epohe u zavisnosti od korišćenog modela i veličine skupa za treniranje (vrednosti za adaptere i LoRA su uprosečeni)}
+	\label{tab:TrainingStatsEpochTime}
+\end{table}
+
 \section{Upoređivanje kompjuterske složenosti}
+\begin{table}[h!]
+	\centering
+	\setlength{\tabcolsep}{12pt}
+	\renewcommand{\arraystretch}{3}
+	\begin{tabular}{|c|c|c|c|c|} 
+		\hline
+		Model & Full  & Adapters & LoRA  & Head \\
+		\hline
+		GPU Usage (MB) & 2114 & 899 & 888 & 855 \\ 
+		\hline
+	\end{tabular}
+	\caption{Prosečan GPU usage u zavisnosti od korišćenog modela}
+	\label{tab:TrainingStatsGPUUsage}
+\end{table}
 
 \chapter{Mogućnosti za dalji napredak}
 
 \chapter{Zaključak}
 
-\begin{figure}[!ht]
-	\centering
-	\label{fig:LLMDataConsumption}
-	\includegraphics[width=0.5\textwidth]{LLMDataConsumption.png}
-	\caption{Odnos godine objavljivanja i količine javno dostupnih podataka za obučavanje modela}
-\end{figure}
-
-\cite{LLMDataConsumption}
-
-
-% ------------------------------------------------------------------------------
-\chapter{Razrada}
-\label{chp:razrada}
-
-% ------------------------------------------------------------------------------
-
-\pangrami
-
-\pangrami
-
-% ------------------------------------------------------------------------------
-\chapter{Zaključak}
-% ------------------------------------------------------------------------------
-\pangrami
-
-\pangrami
-
-% ------------------------------------------------------------------------------
 % Literatura
 % ------------------------------------------------------------------------------
 %\literatura
@@ -638,26 +650,5 @@ Još jedna zajednička stvar koju svaka verzija fine-tuninga koristi je preopter
 % Završni deo teze i prilozi
 \backmatter
 % ==============================================================================
-
-% ------------------------------------------------------------------------------
-% Biografija kandidata
-\begin{biografija}
-  \textbf{Vuk Stefanović Karadžić} (\emph{Tršić,
-    26. oktobar/6. novembar 1787. — Beč, 7. februar 1864.}) bio je
-  srpski filolog, reformator srpskog jezika, sakupljač narodnih
-  umotvorina i pisac prvog rečnika srpskog jezika.  Vuk je
-  najznačajnija ličnost srpske književnosti prve polovine XIX
-  veka. Stekao je i nekoliko počasnih mastera.  Učestvovao je u
-  Prvom srpskom ustanku kao pisar i činovnik u Negotinskoj krajini, a
-  nakon sloma ustanka preselio se u Beč, 1813. godine. Tu je upoznao
-  Jerneja Kopitara, cenzora slovenskih knjiga, na čiji je podsticaj
-  krenuo u prikupljanje srpskih narodnih pesama, reformu ćirilice i
-  borbu za uvođenje narodnog jezika u srpsku književnost. Vukovim
-  reformama u srpski jezik je uveden fonetski pravopis, a srpski jezik
-  je potisnuo slavenosrpski jezik koji je u to vreme bio jezik
-  obrazovanih ljudi. Tako se kao najvažnije godine Vukove reforme
-  ističu 1818., 1836., 1839., 1847. i 1852.
-\end{biografija}
-% ------------------------------------------------------------------------------
 
 \end{document}

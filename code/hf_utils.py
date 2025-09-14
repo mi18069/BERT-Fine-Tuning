@@ -51,7 +51,7 @@ def save_model_to_hf(model, repo_name, private=True, token=HF_WRITE_TOKEN):
     print(f"Model pushed to https://huggingface.co/{ACCOUNT_NAME}/{repo_name}")
 
 
-def load_model_from_hf(repo_name, model, token=HF_WRITE_TOKEN, device="cpu"):
+def load_model_from_hf(repo_name, model, token=HF_READ_TOKEN, device="cpu"):
     cache_dir = snapshot_download(repo_id=f"{ACCOUNT_NAME}/{repo_name}", repo_type="model", token=token)
 
     with open(f"{cache_dir}/config.json", "r") as f:
