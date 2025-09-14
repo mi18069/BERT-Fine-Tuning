@@ -64,11 +64,11 @@
 
 % Apstrakt na srpskom jeziku (u odabranom pismu)
 \apstr{%
-Ovaj rad predstavlja različite načine za fino podešavanje velikih jezičkih modela. U radu se analiziraju koncepti velikih jezičkih modela, njihova struktura, osnovne karakteristike i načini na koji se njihova generativna priroda može prilagoditi potrebama za rešavanjem specifičnih zadataka. Kao centralna tema, vrši se analiza primene različitih tehnika finog prilagođavanja modela BERT za rešavanje problema analize sentimenta. Cilj rada je upoređivanje potrebnih resursa i poboljšanja generisanih odgovora prilikom realizacije svake od obrađenih tehnika. 
+Ovaj rad demonstrira različite pristupe za fino podešavanje jezičkog modela BERT sa ciljem rešavanja problema analize sentimenta. U okviru rada analiziraju se ključne karakteristike velikih jezičkih modela, njihova struktura i mogućnost prilagođavanja generativne prirode specifičnim zadacima. Posebna pažnja posvećena je upoređivanju metoda potpunog i parcijalnog treniranja modela, kroz primenu parametarski efikasnih tehnika finog podešavanja kao što su pristup zasnovan na treniranju samo poslednjeg klasifikacionog sloja, pristup zasnovan na dodavanju i optimizovanju adaptera, kao i pristup zasnovan na korišćenju matrica niskog ranga. U radu se analiziraju i upoređuju različiti aspekti finog podešavanja, koji uključuju potrebne resurse i dobijene rezultate. Cilj rada je ultimativno shvatanje različitih pristupa jednom istom problemu, uz implicitno predstavljanje daljih pravaca u razvoju finog podešavanja.  
 }
 
 % Ključne reči na srpskom jeziku (u odabranom pismu)
-\kljucnereci{veliki jezički modeli, BERT, analiza sentimenta, fino prilagođavanje}
+\kljucnereci{veliki jezički modeli, BERT, analiza sentimenta, fino podešavanje, adapteri, LoRA}
 
 \begin{document}
 % ==============================================================================
@@ -510,9 +510,9 @@ Ovime dobijamo i formulu za računanje nove matrice težina, kao
 
 U originalnom radu, iako je moguće iskoristiti LoRA princip nad bilo kojom matricom, dekompozicija samo matrica pažnje dovela je do rezultata koji su komparativni sa potpunim finim podešavanjem. Ovime se pokazao veliki potencijal nove tehnike, kao i izneo dokaz da dimenzionalnosti današnjih modela nisu neophodne i da znanje i mogućnosti modela često žive u manjem podprostoru.
 
-Najveći problem kod LoRA pristupa je odabir hiperparametara, kao i slojevi nad kojima se koristi. Na Majkrosoftovom sajtu korišćeni su primeri gde hiperparametar r uzima vrednosti 8 i 16, a parametar \(\alpha\) je njegova duplirana vrednost\cite{microsoft_lora}, dok rad Hu i Shen-a koristi 32, dok se za \(\alpha\) uzima dvostruko ili četvorostruko manja vrednost. Rad koji predstavlja QLora pokazuje da je razlika kada se koristi r izme]u 8 i 256 zanemarljiva \cite{2023dettmersQLora}. Na Internetu postoje i druge studije koje se bave istraživanjem i upoređivanjem ovih parametara \cite{unsloth_lora}.
+Najveći problem kod LoRA pristupa je odabir hiperparametara, kao i slojevi nad kojima se koristi. Na Majkrosoftovom sajtu korišćeni su primeri gde hiperparametar r uzima vrednosti 8 i 16, a parametar \(\alpha\) je njegova duplirana vrednost\cite{microsoft_lora}, dok rad Hu i Shen-a koristi 32, dok se za \(\alpha\) uzima dvostruko ili četvorostruko manja vrednost. Rad koji predstavlja QLora pokazuje da je razlika kada se koristi r između 8 i 256 zanemarljiva \cite{2023dettmersQLora}. Na Internetu postoje i druge studije koje se bave istraživanjem i upoređivanjem ovih parametara \cite{unsloth_lora}.
 
-Kako je ovaj pristup rešavanju problema prilagođavanja nov pojam, očekuje se još značajnih rezultata koji će dovesti do boljeg razumevanja i optimizacija, pogotovo kada je reč o korišćenju hiperparametara. Bez obzira na to on je već ostvario značajne rezultate koji su doveli do razvoja daljih unapređenja u vidu novih modela, kao što su QLora \cite{2023dettmersQLora}, AdaLoRA \cite{zhang2023adalora}, Alora \cite{liu2024alora} i drugi.
+Kako je ovaj pristup rešavanju problema prilagođavanja nov pojam, očekuje se još značajnih rezultata koji će dovesti do boljeg razumevanja i optimizacija, pogotovo kada je reč o korišćenju hiperparametara. Bez obzira, na to on je već ostvario značajne rezultate koji su doveli do razvoja daljih unapređenja u vidu novih pristupa finom podešavanju, kao što su QLora \cite{2023dettmersQLora}, AdaLoRA \cite{zhang2023adalora}, Alora \cite{liu2024alora} i drugi.
 
 
 
@@ -597,48 +597,195 @@ Klasa LoRALinear obmotava postojeći sloj tako da se originalne težine zamrzava
 
 \chapter{Poređenje rezultata}
 
+\section{Poređenje procesa treniranja}
 
-\section{Upoređivanje vremenske složenosti}
+Vreme potrebno za obuku, kao i hardverski resursi potrebni za taj proces, predstavljaju bitne kriterijume za odabir pristupa kada je fino podešavanje u pitanju. Ova dva aspekta određuju održivost i isplativost metode u realnim uslovima, posebno u slučajevima kada se radi sa ograničenim resursima ili kada je potrebno brzo isporučivanje.
+
+\subsubsection{Analiza vremenske složenosti}
+Tabela \ref{tab:TimeComparison} prikazuje vreme potrebno za treniranje razlličitih varijanti fine-tuning pristupa nad tri skupa različite veličine. Već na prvi pogled jasno je da postoji eksponencijalan rast vremena treniranja u odnosu na beoj prosleđenih instanci za treniranje. Na malom skupu svi modeli završavaju trening u roku od nekoliko sekundi do nekoliko minuta, pri čemu je i najsporiji model (full fine-tuning) treniran za manje od 9 minuta. Ukoliko se gleda prosečno vreme izvršavanja jedne epohe, razlika je još manje varijabilna. Sa porastom podataka za treniranje, razlike u odabiru modela postaju sve izraženije, pa tako ukupno vreme treniranja pristupa zasnovanog na adapterima dostiže 25 minuta, podeljenih u 3 epohe. 
+
 \begin{table}[h!]
 	\centering
 	\setlength{\tabcolsep}{12pt}
 	\renewcommand{\arraystretch}{3}
-	\begin{tabular}{|c|c|c|c|} 
+	\begin{tabular}{|c|c|c|c|} % Ensure proper vertical lines
 		\hline
-		Set / Model & Small & Medium & Large \\
+		Set/Model & Small & Medium & Large \\
 		\hline
-		Full fine-tuning & 2.94 & 21.54 & 520.97 \\ 
+		Full fine-tuning & \makecell{8.81 \\ (3 x 2.94)} & \makecell{43.09 \\ (2 x 21.54)} & \makecell{ 520.97\\ (1 x 520.97)} \\ 
 		\hline
-		Adapters fine-tuning & 3.54 & 20.66 & 500.38 \\ 
+		Head fine-tuning & \makecell{0.98 \\ (1 x 0.98)} & \makecell{39.96 \\ (5 x 7.99)} & \makecell{761.07 \\ (4 x 190.27)} \\ 
 		\hline
-		LoRA fine-tuning & 2.40 & 17.15 & 404.23 \\ 
+		Adapters (dim=48) fine-tuning & \makecell{7.21 \\ (2 x 3.61)} & \makecell{ 20.49 \\ (1 x 20.49)} & \makecell{997.67 \\ (2 x 498.84)} \\ 
 		\hline
-		Head fine-tuning & 0.98 & 7.99 & 190.27 \\ 
+		Adapters (dim=96) fine-tuning & \makecell{6.93 \\ (2 x 3.46)} & \makecell{ 41.69 \\ (2 x 20.84)} & \makecell{1505.78 \\ (3 x 501.93)} \\ 
 		\hline
+		LoRA (r=32, \(\alpha\)=64) fine-tuning & \makecell{2.21 \\ (1 x 2.21)} & \makecell{67.51 \\ (4 x 16.88)} & \makecell{397.64 \\ (1 x 397.64)} \\ 
+		\hline	
+		LoRA (r=64, \(\alpha\)=32) fine-tuning & \makecell{2.58 \\ (1 x 2.58)} & \makecell{87.09 \\ (5 x 17.42)} & \makecell{821.64 \\ (2 x 410.82)} \\ 
+		\hline		
 	\end{tabular}
-	\caption{Prosečno vreme izvršavanja u sekundama jedne epohe u zavisnosti od korišćenog modela i veličine skupa za treniranje (vrednosti za adaptere i LoRA su uprosečeni)}
-	\label{tab:TrainingStatsEpochTime}
+	\caption{Ukupno vreme za obuku modela (broj epoha x prosečno vreme za jednu epohu)}
+	\label{tab:TimeComparison}
 \end{table}
 
-\section{Upoređivanje kompjuterske složenosti}
+Ukoliko se posmatra vreme potrebno za završetak jedne epohe, primećuje se da za male skupove adapteri predstavljaju najneoptimalnije rešenje, dok za velike skupove tu ulogu preuzima full fine-tuning. Head fine-tuning ovde se postavlja kao najoptimalniji izbor. LoRA pristup pokazuje bolje performanse u odnosu na adaptere, međutim daleko zaostaje za prilagođavanjem samo poslednjeg klasifikacionog sloja.
+
+Iz rezultata treniranja vidi se da izbor konfiguracije u slučaju adaptera i LoRA zasnovanog pristupa ne utiče značajno na vreme potrebno za prolazak kroz jednu iteraciju, ali može imati uticaj na brzinu konvergencije modela, pa samim tim i ukupnog trajanja treniranja.
+Ove razlike su, međutim, primetne samo za velike skupove podataka, a izraženije su kod LoRA pristupa.
+
+Posmatrajući broj izvršenih epoha, skoro svaki pristup doveo je do primene early-stopping mehanizma koji je podešen da prestaje sa treningom ukoliko dođe do pogoršanja performansi na metrici koja meri gubitak pri validaciji. Gledano po ovome, head fine-tuning pokazuje stabilnost u učenju, dok su LoRA i full fine-tuning veoma podložni preprilagođavanju na većim (a LoRA i na malim) skupovima.
+
+
+\subsubsection{Analiza računske složenosti}
+
+Što se razlike u računskim složenostima, ovde je razlika najizraženija u zavisnosti od odabrane tehnike. Tabela \ref{tab:TrainingStatsUsage} prikazuje poređenje modela u odnosu na zauzetost GPU memorije i broja treniranih parametara. Ovde full fine-tuning očekivano koristi nekoliko puta više memorije od ostalih pristupa i zahteva ažuriranje 100\% parametara. Sa druge strane, head fine-tuning obučava svega 0.000014\% od ukupnog broja parametara i zahteva najmanje memorije za izvršavanje. 
+
+Adapteri i LoRA pristup postavljaju se između ova dva pristupa, pri čemu su daleko bliži head nego full fine-tuning-u. Koriste gotovo identične količine GPU memoruje, međutim LoRA obučava 3 puta manje parametara od pristupa sa adapterima. Vrednosti prikazane u tabeli odnose se na konfiguraciju adaptera sa unutrašnjom dimenzijom 96 i LoRA pristup sa parametrima r=32 i \(\alpha\)=64. U drugim konfiguracijama dobijaju se druge vrednosti, ali razlika je neznatna ukoliko se samo posmatra ušteda broja parametara za treniranje u odnosu na početnih 109 miliona.
+
 \begin{table}[h!]
 	\centering
 	\setlength{\tabcolsep}{12pt}
 	\renewcommand{\arraystretch}{3}
 	\begin{tabular}{|c|c|c|c|c|} 
 		\hline
-		Model & Full  & Adapters & LoRA  & Head \\
+		Model & Full & Head & Adapters & LoRA \\
 		\hline
-		GPU Usage (MB) & 2114 & 899 & 888 & 855 \\ 
+		GPU Usage (MB) & 2114 & 855 & 899 & 888  \\ 
+		\hline
+		Num Trainable Params & \makecell{109.483.778 \\ \textit{100.00\%}} & \makecell{1.538 \\ \textit{0.00\%}} & \makecell{3.561.218 \\ \textit{3.15\%}} & \makecell{1.181.186 \\ \textit{1.04\%}} \\ 
 		\hline
 	\end{tabular}
-	\caption{Prosečan GPU usage u zavisnosti od korišćenog modela}
-	\label{tab:TrainingStatsGPUUsage}
+	\caption{Prosečan GPU usage i broj parametara za treniranje u zavisnosti od korišćenog modela. Vrednosti za Adaptere su u verziji sa unutrašnjom dimenzijom 96, dok su vrednosti za LoRA prikazane sa konfiguracijom r=32, \(\alpha\)=64 }
+	\label{tab:TrainingStatsUsage}
 \end{table}
 
-\chapter{Mogućnosti za dalji napredak}
+\subsubsection{Uporedna analiza vremenske i računske složenosti}
+Na osnovu kombinovanih rezultata vremenske i resursne analize dolazi se do sledećih zaključaka. Full fine-tuning pokazuje se kao metod za čije treniranje je potrebno izdvojiti primetno najveće resurse po svakom osnovu. To čini ovaj metod pogodan jedino u scenarijima gde resursi nisu ograničeni. Sa druge strane, head fine-tuning ima najmanju računsku složenost i vreme izvršavanja. Ova metoda pokazuje se korisnom u eksperimentalnim uslovima kada je potrebno brzo validirati ideju ili kada je dostupna količina podataka mala. 
+
+Adapteri predstavljaju srednje rešenje, pri čemu zahtevaju umereno povećanje memorije i broja parametara i pružaju dobar kompromis, ali ne efikasan kao LoRA pristup koji je primetno efikasniji po broju parametara za treniranje, kao i vremena obuke. Variranje parametara ove dve metode ne odražava se značajno ni na vreme, ni na računske zahteve potrebne za treniranje.
+
+\section{Poređenje kvaliteta modela}
+
+Poređenje kvaliteta različitih pristupa finom podešavanju podeljena je po modelima koji su trenirani nad različitom veličinom skupa za treniranje. U cilju evaluacije korišćene su četiri standardne metrike: tačnost (Accuracy), preciznost (Precision), F1 mera (F1 score) i površina ispod ROC krive (ROC AUC). Tačnost meri udeo ispravno klasifikovanih primera u ukupnom broju primera. Ovde je posebno značajna sa obzirom da su instance za testiranje potpuno balansirane - polovina je pozitivna, polovina negativna. Preciznost ukazuje na pouzdanost pozitivnih predikcija, odnosno koliki deo primera koji su označeni kao pozitivni zaista pripada toj klasi. F1 mera predstavlja harmonijsku sredinu tačnosti i odziva (recall). U balansiranim skkupovima, kao što je ovaj, često će vrednost biti bliska tačnosti, ukoliko model sa jednakom učestalošću pogrešno klasifikuje pozitivne i negativne instance. Roc AUC vrednost pokazuje sposobnost modela da razlikuje pozitivnu od negativne klase u različitim pragovima odlučivanja i često se smatra robusnijom metrikom u poređenju sa tačnošću
+
+\subsubsection{Analiza modela treniranih na malom skupu podataka}
+
+Analiza rezultata na malom skupu od 100 instanci (Tabela \ref{tab:EvaluationSmallDataset}) pokazuje značajne razlike u zavisnosti od odabranog pristupa finom podešavanju.
+
+Najbolje performanse postiže full fine-tuning, sa primetno najboljim vrednostima za sve merene metrike, dostižući vrednost za tačnost od čak 0.81. Ovo potvrđuje da čak i na malim skupovima podataka, kada se svi parametri modela optimizuju, može doći do relativno dobrog prilagođavanja zadatku.  
+
+Fino podešavanje klasifikacione glave pokazuje izrazito loše rezultate, sa tačnošću od 0.5 i F1 merom 0.37. Ovo ukazuje da samo prilagođavanje poslednjeg sloja u modelu nije dovoljno da se izvuku sve značajne informacije na malom pruženom skupu podataka. Ovo implicira da model nema kapacitet da iskoristi semantičku strukturu koju BERT već poseduje jer nema mogućnost za dubljom adaptacijom.
+
+Adapteri i LoRA daju rezultate koji variraju između vrednosti prethodna dva pristupa. Bitno je napomenuti da LoRA daje prosečno bolje rezultate od adaptera, kao i da performanse variraju u zavisnosti od konfiguracije rešenja. Tako Adapteri sa unutrašnjom dimenzijom 96 daju bolje rezultate od verzije sa unutrašnjom dimenzijom 48, što znači da drugi pristup ipak dovodi do gubitka značajnih informacija. Varijacije između LoRA modela su manje, u korist konfiguracije u kojoj je \(\alpha\) parametar duplo veći od ranga. 
+
+\begin{table}[h!]
+	\centering
+	\setlength{\tabcolsep}{12pt}
+	\renewcommand{\arraystretch}{1.5}
+	\begin{tabular}{|c|c|c|c|c|} 
+		\hline
+		\textbf{Small} & \textbf{Accuracy} & \textbf{Precision} & \textbf{F1 Score} & \textbf{ROC AUC}  \\
+		\hline
+		Full fine-tuning     & 0.81 & 0.81 & 0.81 & 0.88 \\ 
+		Head fine-tuning     & 0.50 & 0.51 & 0.37 & 0.52 \\ 
+		Adapters (dim=48)  & 0.55 & 0.56 & 0.53 & 0.58 \\ 
+		Adapters (dim=96)  & 0.59 & 0.60 & 0.58 & 0.63 \\ 
+		LoRA (r=32, \(\alpha\))=64)    & 0.63 & 0.64 & 0.62 & 0.71 \\ 
+		LoRA (r=64, \(\alpha\))=32)    & 0.61 & 0.64 & 0.59 & 0.68 \\ 
+		\hline
+	\end{tabular}
+	\caption{Metrike u zavisnosti od modela na skupu za treniranje od 100 instanci}
+	\label{tab:EvaluationSmallDataset}
+\end{table}
+
+\subsubsection{Analiza modela treniranih na srednjem skupu podataka}
+Svi posmatrani modeli trenirani na skupu podataka od 1000 instanci (Tabela \ref{tab:EvaluationMediumDataset}) pokazuju poboljšanje u performansama. I u ovom slučaju, full fine-tuning pokazuje najbolje vrednosti, dostižući tačnost od 0.9.
+
+Head fine-tuning beleži značajan skok performansi u poređenju sa modelom treniranom na malom skupu, gde F1 vrednost dostiže 0.74, u odnosu na pređašnjih 0.37. Dobijeni rezultati pokazuju rezultate bolje i od pristupa zasnovanog na adapterima, čime se ukazuje na mogućnost korišćenja ovog pristupa ukoliko je na raspolaganju dovoljno bogat skup podataka.
+
+Rezultati podešavanja zasnovanog na adapterima pokazuju namanji napredak u odnosu na modele trenirane na malom skupu. Iako su razlike u dve konfiguracije manje izražene, čime se ukazuje na manje variranje u zavisnosti od unutrašnjih podešavanja, ovaj pristup pokazao je najlošije rezultate, dostižući tačnost od 0.64, odnosno 0.62, ovog puta, u korist modela sa manjim unutrašnjim dimenzijama.
+
+LoRA pristup ovde pokazuje izuzetne rezultate, pri čemu konfiguracija r=32, \(\alpha\)=64  postiže identične vrednosti kao i full fine-tuning, dok druga konfiguracija pokazuje minimalno lošije rezultate. Ovi rezultati ukazuju da LoRA predstavlja izuzetno efikasnu alternativu full fine-tuningu, pri čemu koristi znatno manji broj treniranih parametara.
+
+\begin{table}[h!]
+	\centering
+	\setlength{\tabcolsep}{12pt}
+	\renewcommand{\arraystretch}{1.5}
+	\begin{tabular}{|c|c|c|c|c|} 
+		\hline
+		\textbf{Medium} & \textbf{Accuracy} & \textbf{Precision} & \textbf{F1 Score} & \textbf{ROC AUC}  \\
+		\hline
+		Full fine-tuning     & 0.90 & 0.90 & 0.90 & 0.96 \\ 
+		Head fine-tuning     & 0.74 & 0.74 & 0.74 & 0.82 \\ 
+		Adapters (dim=48)  & 0.64 & 0.65 & 0.64 & 0.69 \\ 
+		Adapters (dim=96)  & 0.62 & 0.65 & 0.59 & 0.71 \\ 
+		LoRA (r=32, \(\alpha\))=64)    & 0.90 & 0.90 & 0.90 & 0.97 \\ 
+		LoRA (r=64, \(\alpha\))=32)    & 0.89 & 0.89 & 0.89 & 0.96 \\ 
+		\hline
+	\end{tabular}
+	\caption{Metrike u zavisnosti od modela na skupu za treniranje od 1000 instanci}
+	\label{tab:EvaluationMediumDataset}
+\end{table}
+
+\subsubsection{Analiza modela treniranih na velikom skupu podataka}
+Rezultati modela treniranih na velikom skupu od 25.000 instanci (Tabela \ref{tab:EvaluationFullDataset}) nastavljaju trendove, pri čemu full fine-tuning zadržava najviše performanse (F1=0.93, ROC AUC=0.98), međutim uz značajno manje razlike u odnosu na ostale modele iz prethodna dva scenarija.
+
+Head fine-tuning beleži tačnost od 0.84 što je primetno poboljšanje u odnosu na manje skupove, međutim, i u ovom slučaju pokazuje najlošije rezultate od svih posmatranih metoda. Pristup sa adapterima pokazuje za nijansu bolje rezultate od ovog pristupa, uz minimalnu razliku od odabrane konfiguracije. 
+
+LoRA pristup i dalje pokazuje značajne rezultate, komparabilne sa potpunim finim prilagođavanjem, pokazujući moguću primenu i na velikim skupovima podataka.
+
+
+\begin{table}[h!]
+	\centering
+	\setlength{\tabcolsep}{12pt}
+	\renewcommand{\arraystretch}{1.5}
+	\begin{tabular}{|c|c|c|c|c|} 
+		\hline
+		\textbf{Large} & \textbf{Accuracy} & \textbf{Precision} & \textbf{F1 Score} & \textbf{ROC AUC}  \\
+		\hline
+		Full fine-tuning     & 0.94 & 0.94 & 0.94 & 0.98 \\ 
+		Head fine-tuning     & 0.84 & 0.84 & 0.84 & 0.92 \\ 
+		Adapters (dim=48)  & 0.86 & 0.86 & 0.86 & 0.94 \\ 
+		Adapters (dim=96)  & 0.87 & 0.87 & 0.87 & 0.94 \\ 
+		LoRA (r=32, \(\alpha\))=64)    & 0.93 & 0.93 & 0.93 & 0.98 \\ 
+		LoRA (r=64, \(\alpha\))=32)    & 0.93 & 0.93 & 0.93 & 0.98 \\ 
+		\hline
+	\end{tabular}
+	\caption{Metrike u zavisnosti od modela na skupu za treniranje od 25000 instanci}
+	\label{tab:EvaluationFullDataset}
+\end{table}
+
+\subsubsection{Uporedna analiza različitih veličina skupova za treniranje}
+Sveukupno posmatrano, potpuno fino podešavanje pokazuje se kao najuspešniji metod za postizanje najboljih performansi, posebno se ističući u situacijama kada je na raspolaganju mali skup za treniranje, gde adaptivni pristupi nisu dovoljno jaki. Uprkos primetnim razlikama na malom skupu za treniranje, LoRA se izdvaja kao metoda koja gotovo u potpunosti dostiže ovaj pristup već na skupovima koji sadrže preko 1000 instanci. LoRA takođe pokazuje konstantno najbolje rezultate u odnosu na sve druge adaptivne pristupe.
+
+Ponašanje adaptera pokazuje se kao najneujadnečenije, pokazujući se kao dobar izbor ukoliko je skup za treniranje mali ili dovoljno veliki, dok u nekim trenucima pokazuju zaostajanje za head fine-tuning pristupom. Ovo sugeriše da izbor dimenzije adaptera i strategija optimizacije igraju ključne uloge, koje je potrebno pažljivo odabrati, posebno na manjim skupovima.
+
+Head fine-tuning pokazao se kao pristup koji je preporučljiv isključivo ukoliko je dostupan skup dovoljno veliki. Pokazao je najlošije rezultate na velikom skupu za treniranje, međutim, sa vrednostima uporednim sa pristupom zasnovanom na primeni adaptera, pri čemu je ostvario čak i bolje performanse na skupu srednje veličine. 
+
 
 \chapter{Zaključak}
+Prikazani eksperimenti u ovom radu jasno pokazuju da izbor tehnike za fino podešavanje modela ima presudan uticaj na odnos između potrebnih resursa za rad sa modelom, kao i postignut kvalitet rešenja. Dok je tradicionalni pristup potpunog fine-tuninga u stanju da postigne odlične rezultate, njegova primena u realnim okruženjima često nailazi na barijeru visokih hardverskih i vremenskih troškova. Alternativne tehnike poput treniranja samo izlazne glave, korišćenja adaptera ili primena LoRA modula demonstriraju značajan potencijal da se zadrže visok nivo performansi uz značajno rasterećenje vremenskih i računskih resursa. Time se omogućava mnogo pristupačnije eksperimentisanje i brže pravljenje prototipa, što može biti značajno u eksperimentalnim, kao i dinamičnim okruženjima. Ove metode demonstriraju veću isplativost sa povećanjem broja dostupnih podataka za treniranje.
+
+Jedan od krajnjih zaključaka rada jeste traženje kompromisa između cene i kvaliteta modela. Ovaj rad jasno ilustruje kako zavisnost od veličine skupa za treniranje i različite primenjene tehnike finog podešavanja, tako i aspekte cene koje svaki od modela zahteva za njegovo korišćenje. U različitim situacijama potrebno je pristupiti na drugačiji način, kao i balansirati između dostupnih resursa. Ovo nije situacija u kojoj one-size-fits-all, već je prikazano da se pri radu sa modelima moraju razumeti i analizirati razni aspekti pre pristupanja finom podešavanju, kako bi se zadati cilj dostigao uz minimalne druge troškove.
+
+Posebno je važno istaći da su rezultati ovog rada potvrda šireg trenda u oblasti obrade prirodnog jezika i dubokog učenja. Modeli su dostigli takav nivo razvijenosti da se istraživačka pažnja sve više preusmerava sa kreiranja novih, većih i složenijih arhitektura na pronalaženje efikasnijih i praktičnijih načina njihovog prilagođavanja tazličitim zadacima. Na ovaj način, postojeće arhitekture dobiće mogućnost efikasnog "recikliranja" zarad dobijanja na diverzifikaciji kao i produbljivanju znanja i prilagođavanja modela najrazličitijim potrebama. 
+
+Upravo u ovome leži značaj adaptera i LoRA pristupa. Ove tehnike omogućavaju modularnost i fleksibilnost, jer dodatne komponente mogu biti nezavisno trenirane i lako uklopljene u već postojeću arhitekturu. Ovi pristupi odgovorni su i za poboljšanje skalabilnosti, kada je potrebno održavati čitave kolekcije specijalizovanih modela. Ovi scenariji koji su vrlo učestali u realnim okruženjima omogućavaju veliku memorijsku uštedu kao i vreme potrebno za modifikovanje i distribuciju novih rešenja. 
+
+Rezultati izvedeni u ovom radu pokazuju i da postoji prostor za dalje unapređenje samih tehnika. Iako adapteri i LoRA već sada daju impresivne rezultate, dalja istraživanja u smeru boljeg odabira dostupnih parametara, regularizacije i optimizacije ostavljaju dosta prostora za dalje uštede i kao i dobijanje kvalitetnijih rešenja. Posebno obećavajuća je mogućnost kombinovanja različitih tehnika, koje iako nisu obrađene ovde, predstavljaju sledeći logičan korak u ispitivanju poboljšanja modela specifičnom zadatku.
+
+Treba napomenuti i da priloženi efikasni pristupi prilagođavanju modela otvaraju vrata širokom spektru korisnika. Dok je pun fine-tuning rezervisan za institucije sa značajnim hardverskim kapacitetima, korišćenje ovih pretreniranih modela uz parametarski efikasne metode omogućuju istraživačima, manjim timovima, kao i pojedinačnim korisnicima da učestvuju u naprednom radu sa velikim jezičkim modelima, čime se podstiče dostupnost i demokratizacija tehnologije. Gledano u perspektivi, čini se da u budućnosti pri radu sa jezičkim modelima najbolje rešenje neće pripasti nužno onima koji imaju resurse za pravljenje najvećeg modela, već onome ko na najefikasniji način može iskoristiti postojeća rešenja. Time se otvara i prostor za kreativnije i inovativnije pristupe rešavanju konkretnih problema.
+
+Važno je naglasiti i aspekt održivosti. S obzirom na to da treniranje velikih modela zahteva ogromne količine energije, preusmeravanje na parametarski efikasne metode može značajno doprinetu smanjenju prirodnih resursa potrebnih za njihovo održavanje, kao i smanjiti količinu zagađenja u prirodi koje oni prave. Brojni autori ističu značajan ugljenični otisak (carbon footprint) koji nastaje prilikom rada sa velikim modelima kao i potrošnju energije koja je potrebna za svakodnevni rad \cite{LLMCarbonFootprint}. Zbog ovoga je maksimalna optimizacija svih dobijenih modela prioritet kojij će doprineti boljoj održivosti i većoj ekološkoj odgovornosti.
+
+Sve navedeno ukazuje na to da buduća istraživanja u ovoj oblasti treba da budu usmerena na dalju optimizaciju metoda finog podešavanja, kao i na razvoj kriterijuma za odabir najpogodnijeg pristupa u zavisnosti od zadatka, dostupnih resursa i željenog nivoa performansi. Drugim rečima, umesto jedinstvenog rešenja, biće sve važnije razvijati fleksibilne metodologije koje se mogu prilagođavati specifičnim potrebama. Iako su obrađena rešenja u ovom radu relativno novi pristupi u poznatom problemu, svakodnevno se javljaju i nova. Neke od najskorijih tehnika su QLoRA (eng. Quantized Low-Rank Adaptation)\cite{2023dettmersQLora} koja kombinuje kvantizaciju sa poznatom LoRA adaptacijom kako bi omogućila efikasno treniranje veoma velikih modela na ograničenim hardverskim resursima. Takođe, postoje i pristupi poput QDyLoRA i dinamičkih metoda prilagođavanja rangova \cite{2024qdylora} koje se istražuju zarad dodatnog poboljšanja odnosa dobijenih performansi i potrošnje resursa. 
+
+
+Na kraju, ovaj rad pokazuje da je razmevanje i poređenje različitih tehnika finog podešavanja ključno za pravilno korišćenje velikih jezičkih modela. Dobijeni rezultati pružaju osnovu za donošenje informisanih odluka u praksi dok istovremeno ukazuju na pravce daljeg napretka u istraživanju. Na taj način, rad doprinosi širem razumevanju ne samo tehničkih aspekata problema, već i njegove strateške važnosti u budućem razvoju veštačke inteligencije.
+
+
+
 
 % Literatura
 % ------------------------------------------------------------------------------
