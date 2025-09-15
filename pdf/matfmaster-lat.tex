@@ -550,14 +550,14 @@ Još jedan od problema je i međusoban uticaj različitih metoda finog podešava
 
 
 \chapter{Implementacija rešenja}
-Praktična implementacija rešenja zasniva se na korišćenju unapred treniranog jezičkog modela DistilBERT dostupnog preko platforme Hugging Face Transformers \cite{Huggingface2023}. Ovaj model moguće je trenirati za potrebe rešavanja različitih zadataka, ali u ovom radu biće korišćen za rešavanje problema analize sentimenta, što predstavlja problem binarne klasifikacije teksta. Da bi model mogao uspešno da se koristi u ovu svrhu, neophodno je dodati na njega izlazni sloj, u ovom slučaju za potrebe binarne klasifikacije.
+Praktična implementacija rešenja zasniva se na korišćenju unapred treniranog jezičkog modela BERT dostupnog preko platforme Hugging Face Transformers \cite{Huggingface2023}. Ovaj model moguće je trenirati za potrebe rešavanja različitih zadataka, ali u ovom radu biće korišćen za rešavanje problema analize sentimenta, što predstavlja problem binarne klasifikacije teksta. Da bi model mogao uspešno da se koristi u ovu svrhu, neophodno je dodati na njega izlazni sloj, u ovom slučaju za potrebe binarne klasifikacije.
 
 Preuzimanje baznog BERT modela vrši se pomoću metode \begin{verbatim}
 	AutoModel.from_pretrained("bert-base-uncased")
 \end{verbatim}
-AutoModel je deo \textit{transformers} biblioteke i često je korišćen za dobavljanje različitih modela sa HF platforme. Parametar "distilbert-base-uncased" predstavlja DistilBERT model koji uvozimo, base predstavlja njegovu osnovnu verziju, dok "uncased" označava da model ne uzima u obzir razliku između velikih i malih slova (za ove potrebe koristi se "cased" verzija modela). Moguće je koristiti i biblioteku \i{AutoModelForClassificationHead} sa istom metodom i argumentima koja vraća istreniran model posebno namenjen za primenu nad klasifikacionim zadacima, međutim, ovo predstavlja sistematičniji način za upoznavanje sa strukturom modela.
+AutoModel je deo \textit{transformers} biblioteke i često je korišćen za dobavljanje različitih modela sa HF platforme. Parametar "bert-base-uncased" predstavlja BERT model koji uvozimo, base predstavlja njegovu osnovnu verziju, dok "uncased" označava da model ne uzima u obzir razliku između velikih i malih slova (za ove potrebe koristi se "cased" verzija modela). Moguće je koristiti i biblioteku \i{AutoModelForClassificationHead} sa istom metodom i argumentima koja vraća istreniran model posebno namenjen za primenu nad klasifikacionim zadacima, međutim, ovo predstavlja sistematičniji način za upoznavanje sa strukturom modela.
 
-U svakoj od implementacija modela, na ovako dobijen model dodaje se klasifikaciona glava kako bi se model prilagodio za rešavanje konkretnog problema. Ovo je ostvareno dodavanjem linearnog modula koji uzima vektor dužine 768, što predstavlja unutrašnju dimenziju poslednjeg sloja DistilBERT modela i transformiše u dimenziju veličine 2 za potrebe binarne klasifikacije. 
+U svakoj od implementacija modela, na ovako dobijen model dodaje se klasifikaciona glava kako bi se model prilagodio za rešavanje konkretnog problema. Ovo je ostvareno dodavanjem linearnog modula koji uzima vektor dužine 768, što predstavlja unutrašnju dimenziju poslednjeg sloja BERT modela i transformiše u dimenziju veličine 2 za potrebe binarne klasifikacije. 
 
 Još jedna zajednička stvar koju svaka verzija fine-tuninga koristi je preopterećivanje funkcije forward(), koja se nalazi unutar svakog modula koji dodajemo korišćenjem torch.nn.Module klase \cite{pytorch_nn_module}. Ova funkcija je ključna komponenta svake klase izvezene iz \texttt{torch.nn.Module} i odgovorna je za prolazak informacija kroz mrežu jer se u njoj definiše na koji način se ulazni podaci obrađuju i dalje prosleđuju sledećem sloju u obradi.  
 
@@ -579,7 +579,7 @@ Pristup zasnovan na adapterima pri treniranju BERT modela zasniva se na ubacivan
 
 Normalizacija (LayerNorm) koristi se nakon dodavanja adaptera na rezidualnu putanju. Njena osnovna uloga je stabilizacija treniranja, jer normalizacijom izlaza smanjuje varijansu vrednosti koje prolaze kroz mrežu i time smanjuje šansu od eksplodirajućih ili nestajućih gradijenata. U kontekstu adaptera, normalizacija obezbeđuje da doavanje novih slojeva za treniranja ne naruši balans reprezentacija koje su već naučene u pretreniranom modelu. Ovo uz inicijalno postavljanje težina u up-projekciji obezbeđuje kontrolisanu integraciju novih parametara u postojeću arhitekturu.
 
-Implementacijom adaptera broj parametara za treniranje je 2 380 802, što čini 2.13\% od ukupnog broja parametara modela. Model je obučavan u zavisnosti od unutrašnje dimenzionalnosti korišćene u adapterima, gde uzimaju vrednosti 64 i 128.
+Model je obučavan u zavisnosti od unutrašnje dimenzionalnosti korišćene u adapterima, gde uzimaju vrednosti 48 i 96. Ove vrednosti odabrane su jer predstavljaju tačno 1/16, odnosno 1/8 od dimenzije vektora BERT modela. Implementacijom adaptera broj parametara za treniranje je 1 790 594 što čini 1.61\% u slučaju unutrašnje dimenzije 48, odnosno  3 561 218, što čini 3.15\% od ukupnog broja parametara modela u slučaju unutrašnje dimenzije adaptera 96 . 
 
 \section{Implementacija finog podešavanja zasnovanog na matricama niskog ranga}
 Implementacija ove vrste finog podešavanja izvedena je kroz dve klase: LoRALayer i LoRALinear.
@@ -593,7 +593,9 @@ gde je \(\alpha\) faktor skaliranja doprinosa.
 
 U inicijalizaciji, matrica $A$ se inicijalizuje pomoću Kaiming\cite{he2015delving} uniformne raspodele koja omogućava stabilian tok gradijenta kroz ReLU aktivacije, dok je matrica $B$ inicijalizovana nulama. Na ovaj način obezbeđuje se zadržavanje osnovnim svojstava pretreniranog modela uz mogućnost naknadnog doprinosa LoRA slojeva tokom treniranja.
 
-Klasa LoRALinear obmotava postojeći sloj tako da se originalne težine zamrzavaju, dok se ostatak koristi kao doprinos u učenju. Izlaz iz ovog sloja formira se kao suma originalnog linearnog sloja i LoRA komponente. Na ovaj način model uči samo matrice $A$ i $B$ čime se postiže značajno smanjenje broja trenirajućih parametara, na ukupno 296 450, što predstavlja 0.26\% ukupnog broja parametara.
+Klasa LoRALinear obmotava postojeći sloj tako da se originalne težine zamrzavaju, dok se ostatak koristi kao doprinos u učenju. Izlaz iz ovog sloja formira se kao suma originalnog linearnog sloja i LoRA komponente. Na ovaj način model uči samo matrice $A$ i $B$ čime se postiže značajno smanjenje broja trenirajućih parametara.
+
+U sprovođenju eksperimenta, uzimaju se dve različite LoRA konfiguracije - jedna za vrednosti r=32 i \(\alpha\)=64, koje proizvode novih 1 181 186 parametara, odnosno 1.04\% od ukupnog broja parametara u modelu, i druga za vrednosti r=64, \(\alpha\)=32, sa ukupno 2 360 834, odnosno 2.11\% ukupnog broja parametara.
 
 \chapter{Poređenje rezultata}
 
@@ -641,7 +643,7 @@ Posmatrajući broj izvršenih epoha, skoro svaki pristup doveo je do primene ear
 
 Što se razlike u računskim složenostima, ovde je razlika najizraženija u zavisnosti od odabrane tehnike. Tabela \ref{tab:TrainingStatsUsage} prikazuje poređenje modela u odnosu na zauzetost GPU memorije i broja treniranih parametara. Ovde full fine-tuning očekivano koristi nekoliko puta više memorije od ostalih pristupa i zahteva ažuriranje 100\% parametara. Sa druge strane, head fine-tuning obučava svega 0.000014\% od ukupnog broja parametara i zahteva najmanje memorije za izvršavanje. 
 
-Adapteri i LoRA pristup postavljaju se između ova dva pristupa, pri čemu su daleko bliži head nego full fine-tuning-u. Koriste gotovo identične količine GPU memoruje, međutim LoRA obučava 3 puta manje parametara od pristupa sa adapterima. Vrednosti prikazane u tabeli odnose se na konfiguraciju adaptera sa unutrašnjom dimenzijom 96 i LoRA pristup sa parametrima r=32 i \(\alpha\)=64. U drugim konfiguracijama dobijaju se druge vrednosti, ali razlika je neznatna ukoliko se samo posmatra ušteda broja parametara za treniranje u odnosu na početnih 109 miliona.
+Adapteri i LoRA pristup postavljaju se između ova dva pristupa, pri čemu su daleko bliži head nego full fine-tuning-u. Koriste gotovo identične količine GPU memoruje, međutim LoRA obučava 3 puta manje parametara od pristupa sa adapterima. Vrednosti prikazane u tabeli odnose se na konfiguraciju adaptera sa unutrašnjom dimenzijom 96 i LoRA pristup sa parametrima r=64 i \(\alpha\)=32. U drugim konfiguracijama dobijaju se druge vrednosti, ali razlika je neznatna ukoliko se samo posmatra ušteda broja parametara za treniranje u odnosu na početnih 109 miliona.
 
 \begin{table}[h!]
 	\centering
@@ -653,10 +655,10 @@ Adapteri i LoRA pristup postavljaju se između ova dva pristupa, pri čemu su da
 		\hline
 		GPU Usage (MB) & 2114 & 855 & 899 & 888  \\ 
 		\hline
-		Num Trainable Params & \makecell{109.483.778 \\ \textit{100.00\%}} & \makecell{1.538 \\ \textit{0.00\%}} & \makecell{3.561.218 \\ \textit{3.15\%}} & \makecell{1.181.186 \\ \textit{1.04\%}} \\ 
+		Num Trainable Params & \makecell{109.483.778 \\ \textit{100.00\%}} & \makecell{1.538 \\ \textit{0.00\%}} & \makecell{3.561.218 \\ \textit{3.15\%}} & \makecell{2.360.834 \\ \textit{2.11\%}} \\ 
 		\hline
 	\end{tabular}
-	\caption{Prosečan GPU usage i broj parametara za treniranje u zavisnosti od korišćenog modela. Vrednosti za Adaptere su u verziji sa unutrašnjom dimenzijom 96, dok su vrednosti za LoRA prikazane sa konfiguracijom r=32, \(\alpha\)=64 }
+	\caption{Prosečan GPU usage i broj parametara za treniranje u zavisnosti od korišćenog modela. Vrednosti za Adaptere su u verziji sa unutrašnjom dimenzijom 96, dok su vrednosti za LoRA prikazane sa konfiguracijom r=64, \(\alpha\)=32 }
 	\label{tab:TrainingStatsUsage}
 \end{table}
 
